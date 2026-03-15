@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>微博录</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>微博录</h1>
+            <div class="stats">
+                <span>共 {{ total }} 条</span>
+                {% if last_scrape %}
+                <span>上次抓取: {{ last_scrape }}</span>
+                {% endif %}
+                <a href="{{ url_for('manual_scrape') }}" class="btn-scrape">立即抓取</a>
+            </div>
+            {% with messages = get_flashed_messages() %}
+            {% if messages %}
+            <div class="flash">{{ messages[0] }}</div>
+            {% endif %}
+            {% endwith %}
+        </header>
+
+        {% if not posts %}
+        <div class="empty">
+            <p>暂无微博数据</p>
+            <p>请先配置 .env 文件，然后点击「立即抓取」</p>
+        </div>
+        {% endif %}
+
+        {% for post in posts %}
+        <article class="post">
+            <div class="post-header">
+                <img class="avatar" src="{{ post.user_avatar }}" alt="" loading="lazy"
+                     onerror="this.style.display='none'">
+                <div class="post-meta">
+                    <span class="user-name">{{ post.user_name }}</span>
+                    <span class="post-time">{{ post.created_at }}</span>
+                </div>
+            </div>
+            <div class="post-text">{{ post.text | safe }}</div>
+            {% if post.images %}
+            <div class="post-images count-{{ post.images | length if post.images | length <= 4 else 'many' }}">
+                {% for img in post.images %}
+                <div class="img-wrapper" onclick="openImage('{{ img }}')">
+                    <img src="{{ img }}" alt="" loading="lazy">
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </article>
+        {% endfor %}
+
+        {% if total_pages > 1 %}
+        <nav class="pagination">
+            {% if page > 1 %}
+            <a href="?page={{ page - 1 }}">&laquo; 上一页</a>
+            {% endif %}
+
+            {% for p in range(1, total_pages + 1) %}
+                {% if p == page %}
+                <span class="current">{{ p }}</span>
+                {% elif p == 1 or p == total_pages or (p >= page - 2 and p <= page + 2) %}
+                <a href="?page={{ p }}">{{ p }}</a>
+                {% elif p == page - 3 or p == page + 3 %}
+                <span class="dots">...</span>
+                {% endif %}
+            {% endfor %}
+
+            {% if page < total_pages %}
+            <a href="?page={{ page + 1 }}">下一页 &raquo;</a>
+            {% endif %}
+        </nav>
+        {% endif %}
+    </div>
+
+    <!-- Lightbox for full-size images -->
+    <div id="lightbox" class="lightbox" onclick="this.classList.remove('active')">
+        <img id="lightbox-img" src="" alt="">
+    </div>
+
+    <script>
+    function openImage(url) {
+        var lb = document.getElementById('lightbox');
+        document.getElementById('lightbox-img').src = url;
+        lb.classList.add('active');
+    }
+    </script>
+</body>
+</html>
