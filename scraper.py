@@ -10,23 +10,22 @@ import database
 logger = logging.getLogger(__name__)
 
 HEADERS = {
-    'User-Agent': ('Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) '
+    'User-Agent': ('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) '
                    'AppleWebKit/605.1.15 (KHTML, like Gecko) '
                    'Mobile/15E148 Safari/604.1'),
     'X-Requested-With': 'XMLHttpRequest',
-    'Referer': 'https://m.weibo.cn/feed/friends',
+    'Referer': 'https://m.weibo.cn/',
     'Accept': 'application/json, text/plain, */*',
 }
 
-FEED_URL = 'https://m.weibo.cn/feed/friends'
+# Group feed endpoint (not /feed/friends)
+FEED_URL = 'https://m.weibo.cn/feed/group'
 
 
-def fetch_feed(cookie, group_id, max_id=None):
-    """Fetch one page of the friend group feed. Returns (statuses, max_id_for_next_page)."""
+def fetch_feed(cookie, group_id, page=1):
+    """Fetch one page of the friend group feed. Returns list of statuses."""
     headers = {**HEADERS, 'Cookie': cookie}
-    params = {'gid': group_id}
-    if max_id:
-        params['max_id'] = max_id
+    params = {'gid': group_id, 'page': page}
 
     resp = requests.get(FEED_URL, headers=headers, params=params, timeout=15)
     resp.raise_for_status()
@@ -34,11 +33,22 @@ def fetch_feed(cookie, group_id, max_id=None):
 
     if data.get('ok') != 1:
         logger.warning('API returned not ok: %s', data.get('msg', 'unknown'))
-        return [], None
+        return []
 
-    statuses = data.get('data', {}).get('statuses', [])
-    next_max_id = data.get('data', {}).get('max_id')
-    return statuses, next_max_id
+    # Response uses cards array; card_type 9 contains mblog (post)
+    statuses = []
+    cards = data.get('data', {}).get('cards', [])
+    for card in cards:
+        if card.get('card_type') == 9:
+            mblog = card.get('mblog')
+            if mblog:
+                statuses.append(mblog)
+
+    # Fallback: some endpoints return data.statuses directly
+    if not statuses:
+        statuses = data.get('data', {}).get('statuses', [])
+
+    return statuses
 
 
 def parse_status(status):
@@ -88,14 +98,13 @@ def scrape_latest():
         return 0
 
     new_count = 0
-    max_id = None
 
     # Fetch up to 3 pages
-    for page in range(3):
+    for page_num in range(1, 4):
         try:
-            statuses, next_max_id = fetch_feed(cookie, group_id, max_id)
+            statuses = fetch_feed(cookie, group_id, page=page_num)
         except Exception:
-            logger.exception('Failed to fetch feed (page %d)', page)
+            logger.exception('Failed to fetch feed (page %d)', page_num)
             break
 
         if not statuses:
@@ -114,10 +123,6 @@ def scrape_latest():
         if not has_new:
             break
 
-        if not next_max_id:
-            break
-
-        max_id = next_max_id
         time.sleep(random.uniform(2, 5))
 
     logger.info('Scrape done, %d new posts saved', new_count)
