@@ -1,6 +1,8 @@
+import re
 import time
 import random
 import logging
+from datetime import datetime, timedelta
 
 import requests
 
@@ -51,6 +53,60 @@ def fetch_feed(cookie, group_id, page=1):
     return statuses
 
 
+def parse_created_at(text):
+    """Convert Weibo's created_at string to a unix timestamp.
+    Handles: '刚刚', 'N分钟前', 'N小时前', '昨天 HH:MM', 'MM-DD', 'YYYY-MM-DD' etc.
+    """
+    now = datetime.now()
+    text = text.strip()
+
+    if text == '刚刚':
+        return int(now.timestamp())
+
+    m = re.match(r'(\d+)\s*分钟前', text)
+    if m:
+        return int((now - timedelta(minutes=int(m.group(1)))).timestamp())
+
+    m = re.match(r'(\d+)\s*小时前', text)
+    if m:
+        return int((now - timedelta(hours=int(m.group(1)))).timestamp())
+
+    m = re.match(r'昨天\s*(\d{1,2}):(\d{2})', text)
+    if m:
+        yesterday = now - timedelta(days=1)
+        dt = yesterday.replace(hour=int(m.group(1)), minute=int(m.group(2)), second=0)
+        return int(dt.timestamp())
+
+    # "MM-DD HH:MM" (same year)
+    m = re.match(r'(\d{1,2})-(\d{1,2})\s+(\d{1,2}):(\d{2})', text)
+    if m:
+        dt = now.replace(month=int(m.group(1)), day=int(m.group(2)),
+                         hour=int(m.group(3)), minute=int(m.group(4)), second=0)
+        if dt > now:
+            dt = dt.replace(year=dt.year - 1)
+        return int(dt.timestamp())
+
+    # "MM-DD" (same year, no time)
+    m = re.match(r'(\d{1,2})-(\d{1,2})$', text)
+    if m:
+        dt = now.replace(month=int(m.group(1)), day=int(m.group(2)),
+                         hour=0, minute=0, second=0)
+        if dt > now:
+            dt = dt.replace(year=dt.year - 1)
+        return int(dt.timestamp())
+
+    # Full datetime formats
+    for fmt in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M', '%Y-%m-%d',
+                '%a %b %d %H:%M:%S %z %Y'):
+        try:
+            return int(datetime.strptime(text, fmt).timestamp())
+        except ValueError:
+            continue
+
+    # Fallback: use current time
+    return int(now.timestamp())
+
+
 def parse_status(status):
     """Extract relevant fields from a weibo status dict."""
     # Collect images
@@ -78,13 +134,15 @@ def parse_status(status):
                     images.append(url)
 
     user = status.get('user', {})
+    created_at = status.get('created_at', '')
     return {
         'weibo_id': str(status.get('id', '')),
         'user_name': user.get('screen_name', ''),
         'user_avatar': user.get('profile_image_url', ''),
         'text': text,
         'images': images,
-        'created_at': status.get('created_at', ''),
+        'created_at': created_at,
+        'created_ts': parse_created_at(created_at) if created_at else 0,
     }
 
 

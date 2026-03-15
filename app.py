@@ -60,7 +60,8 @@ if __name__ == '__main__':
 
     scheduler = BackgroundScheduler()
     scheduler.add_job(scrape_job, 'interval', seconds=config.SCRAPE_INTERVAL,
-                      id='weibo_scraper', replace_existing=True)
+                      id='weibo_scraper', replace_existing=True,
+                      max_instances=1, coalesce=True)
     scheduler.start()
     logger.info('Scheduler started, interval = %d seconds', config.SCRAPE_INTERVAL)
 
