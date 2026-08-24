@@ -1,0 +1,6 @@
+# 攀岩视频比对模块依赖（与微博爬虫部分相互独立）
+# 安装: pip install -r requirements-climbing.txt
+mediapipe>=0.10.9
+opencv-python>=4.8.0
+numpy>=1.24
+Pillow>=9.5

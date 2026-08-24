@@ -4,3 +4,7 @@ __pycache__/
 *.pyc
 .venv/
 venv/
+
+# 攀岩比对项目产物
+climb-projects/
+*.pose.json.gz
